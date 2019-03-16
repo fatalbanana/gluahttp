@@ -1,14 +1,19 @@
 package gluahttp
 
-import "github.com/yuin/gopher-lua"
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/yuin/gopher-lua"
+	luajson "layeh.com/gopher-json"
+)
 
 const luaHttpResponseTypeName = "http.response"
 
 type luaHttpResponse struct {
 	res      *http.Response
 	body     lua.LString
-	bodySize int
+	bodySize int64
+	json     *map[string]interface{}
 }
 
 func registerHttpResponseType(module *lua.LTable, L *lua.LState) {
@@ -18,12 +23,13 @@ func registerHttpResponseType(module *lua.LTable, L *lua.LState) {
 	L.SetField(module, "response", mt)
 }
 
-func newHttpResponse(res *http.Response, body *[]byte, bodySize int, L *lua.LState) *lua.LUserData {
+func newHttpResponse(res *http.Response, body *[]byte, bodySize int64, L *lua.LState, jsonMap *map[string]interface{}) *lua.LUserData {
 	ud := L.NewUserData()
 	ud.Value = &luaHttpResponse{
 		res:      res,
 		body:     lua.LString(*body),
 		bodySize: bodySize,
+		json:     jsonMap,
 	}
 	L.SetMetatable(ud, L.GetTypeMetatable(luaHttpResponseTypeName))
 	return ud
@@ -54,6 +60,8 @@ func httpResponseIndex(L *lua.LState) int {
 		return httpResponseBody(res, L)
 	case "body_size":
 		return httpResponseBodySize(res, L)
+	case "json":
+		return httpResponseJson(res, L)
 	}
 
 	return 0
@@ -94,5 +102,16 @@ func httpResponseBody(res *luaHttpResponse, L *lua.LState) int {
 
 func httpResponseBodySize(res *luaHttpResponse, L *lua.LState) int {
 	L.Push(lua.LNumber(res.bodySize))
+	return 1
+}
+
+func httpResponseJson(res *luaHttpResponse, L *lua.LState) int {
+	luaJson := L.NewTable()
+	if res.json != nil {
+		for key, value := range *res.json {
+			luaJson.RawSetString(key, luajson.DecodeValue(L, value))
+		}
+	}
+	L.Push(luaJson)
 	return 1
 }
