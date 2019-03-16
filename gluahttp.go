@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	urlLib "net/url"
 	"strings"
 
 	"github.com/yuin/gopher-lua"
@@ -139,6 +140,25 @@ func (h *httpModule) requestBatch(L *lua.LState) int {
 	}
 }
 
+func setUrlValues(urlValues urlLib.Values, key lua.LValue, value lua.LValue) {
+	switch value.(type) {
+	case lua.LNumber:
+	case lua.LString:
+		urlValues.Add(key.String(), lua.LVAsString(value))
+	case lua.LBool:
+		if !lua.LVIsFalse(value) {
+			urlValues.Add(key.String(), "true")
+		} else {
+			urlValues.Add(key.String(), "false")
+		}
+	case *lua.LTable:
+		tbl := value.(*lua.LTable)
+		tbl.ForEach(func(idx lua.LValue, listValue lua.LValue) {
+			setUrlValues(urlValues, key, listValue)
+		})
+	}
+}
+
 func (h *httpModule) doRequest(L *lua.LState, method string, url string, options *lua.LTable) (*lua.LUserData, error) {
 	req, err := http.NewRequest(strings.ToUpper(method), url, nil)
 	if err != nil {
@@ -161,6 +181,12 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 		switch reqQuery := options.RawGet(lua.LString("query")).(type) {
 		case lua.LString:
 			req.URL.RawQuery = reqQuery.String()
+		case *lua.LTable:
+			urlValues := urlLib.Values{}
+			reqQuery.ForEach(func(key lua.LValue, value lua.LValue) {
+				setUrlValues(urlValues, key, value)
+			})
+			req.URL.RawQuery = urlValues.Encode()
 		}
 
 		body := options.RawGet(lua.LString("body"))
