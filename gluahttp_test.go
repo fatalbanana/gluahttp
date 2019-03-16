@@ -167,6 +167,22 @@ func TestRequestQuery(t *testing.T) {
 	}
 }
 
+func TestRequestQueryTable(t *testing.T) {
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	setupServer(listener)
+
+	if err := evalLua(t, `
+		local http = require("http")
+		response, error = http.request("get", "http://`+listener.Addr().String()+`", {
+			query={['page'] = 2, ['cool'] = false, ['bad'] = true, ['text'] = 'hi', ['bla'] = {'foo bar', '2', true, false}},
+		})
+
+		assert_equal('Requested GET / with query "bad=true&bla=foo+bar&bla=2&bla=true&bla=false&cool=false&text=hi"', response['body'])
+	`); err != nil {
+		t.Errorf("Failed to evaluate script: %s", err)
+	}
+}
+
 func TestGet(t *testing.T) {
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	setupServer(listener)
