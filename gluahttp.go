@@ -1,11 +1,15 @@
 package gluahttp
 
-import "github.com/yuin/gopher-lua"
-import "net/http"
-import "fmt"
-import "errors"
-import "io/ioutil"
-import "strings"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
+
+	"github.com/yuin/gopher-lua"
+)
 
 type httpModule struct {
 	do func(req *http.Request) (*http.Response, error)
@@ -145,6 +149,8 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 		req = req.WithContext(ctx)
 	}
 
+	jsonOutput := false
+
 	if options != nil {
 		if reqCookies, ok := options.RawGet(lua.LString("cookies")).(*lua.LTable); ok {
 			reqCookies.ForEach(func(key lua.LValue, value lua.LValue) {
@@ -175,6 +181,13 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 			req.Body = ioutil.NopCloser(strings.NewReader(body))
 		}
 
+		switch luaJson := options.RawGet(lua.LString("json")).(type) {
+		case lua.LBool:
+			if luaJson == lua.LTrue {
+				jsonOutput = true
+			}
+		}
+
 		// Set these last. That way the code above doesn't overwrite them.
 		if reqHeaders, ok := options.RawGet(lua.LString("headers")).(*lua.LTable); ok {
 			reqHeaders.ForEach(func(key lua.LValue, value lua.LValue) {
@@ -188,14 +201,26 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 		return nil, err
 	}
 
+	var body []byte
+	var contentLength int64
+	var jsonMap map[string]interface{}
+
 	defer res.Body.Close()
-	body, err := ioutil.ReadAll(res.Body)
+	if !jsonOutput {
+		body, err = ioutil.ReadAll(res.Body)
+		contentLength = int64(len(body))
+	} else {
+		contentLength = res.ContentLength
+		dec := json.NewDecoder(res.Body)
+		jsonMap = make(map[string]interface{})
+		err = dec.Decode(&jsonMap)
+	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return newHttpResponse(res, &body, len(body), L), nil
+	return newHttpResponse(res, &body, contentLength, L, &jsonMap), nil
 }
 
 func (h *httpModule) doRequestAndPush(L *lua.LState, method string, url string, options *lua.LTable) int {
