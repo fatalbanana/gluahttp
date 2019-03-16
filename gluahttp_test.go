@@ -1,13 +1,17 @@
 package gluahttp
 
-import "github.com/yuin/gopher-lua"
-import "testing"
-import "io/ioutil"
-import "net/http"
-import "net"
-import "fmt"
-import "net/http/cookiejar"
-import "strings"
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net"
+	"net/http"
+	"net/http/cookiejar"
+	"strings"
+	"testing"
+
+	"github.com/yuin/gopher-lua"
+)
 
 func TestRequestNoMethod(t *testing.T) {
 	if err := evalLua(t, `
@@ -146,6 +150,26 @@ func TestRequestHeaders(t *testing.T) {
 			'Content-Type: application/json' ..
 			'Content-Length: 0' ..
 			'Body: ', response['body'])
+	`); err != nil {
+		t.Errorf("Failed to evaluate script: %s", err)
+	}
+}
+
+func TestRequestJson(t *testing.T) {
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	setupServer(listener)
+
+	if err := evalLua(t, `
+		local http = require("http")
+		response, error = http.request("get", "http://`+listener.Addr().String()+`/json", {json = true})
+
+		assert_equal(200, response['status_code'])
+		assert_equal('application/json', response['headers']['Content-Type'])
+		assert_equal('45', response['headers']['Content-Length'])
+		assert_equal(2, response['json']['hello'][1])
+		assert_equal("foo", response['json']['hello'][2])
+		assert_equal(true, response['json']['hello'][3])
+		assert_equal("bla", response['json']['bla']['ble'])
 	`); err != nil {
 		t.Errorf("Failed to evaluate script: %s", err)
 	}
@@ -438,6 +462,16 @@ func setupServer(listener net.Listener) {
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
+	})
+	mux.HandleFunc("/json", func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		enc := json.NewEncoder(w)
+		enc.Encode(map[string]interface{}{
+			"hello": []interface{}{2, "foo", true},
+			"bla": map[string]interface{}{
+				"ble": "bla",
+			},
+		})
 	})
 	mux.HandleFunc("/set_cookie", func(w http.ResponseWriter, req *http.Request) {
 		http.SetCookie(w, &http.Cookie{Name: "session_id", Value: "12345"})
