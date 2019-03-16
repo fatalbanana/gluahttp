@@ -109,26 +109,6 @@ func TestRequestGetWithRedirect(t *testing.T) {
 	}
 }
 
-func TestRequestPostForm(t *testing.T) {
-	listener, _ := net.Listen("tcp", "127.0.0.1:0")
-	setupServer(listener)
-
-	if err := evalLua(t, `
-		local http = require("http")
-		response, error = http.request("post", "http://`+listener.Addr().String()+`", {
-			form="username=bob&password=secret"
-		})
-
-		assert_equal(
-			'Requested POST / with query ""' ..
-			'Content-Type: application/x-www-form-urlencoded' ..
-			'Content-Length: 28' ..
-			'Body: username=bob&password=secret', response['body'])
-	`); err != nil {
-		t.Errorf("Failed to evaluate script: %s", err)
-	}
-}
-
 func TestRequestHeaders(t *testing.T) {
 	listener, _ := net.Listen("tcp", "127.0.0.1:0")
 	setupServer(listener)
