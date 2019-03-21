@@ -190,15 +190,6 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 		}
 
 		body := options.RawGet(lua.LString("body"))
-		if _, ok := body.(lua.LString); !ok {
-			// "form" is deprecated.
-			body = options.RawGet(lua.LString("form"))
-			// Only set the Content-Type to application/x-www-form-urlencoded
-			// when someone uses "form", not for "body".
-			if _, ok := body.(lua.LString); ok {
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			}
-		}
 
 		switch reqBody := body.(type) {
 		case lua.LString:
@@ -214,7 +205,6 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 			}
 		}
 
-		// Set these last. That way the code above doesn't overwrite them.
 		if reqHeaders, ok := options.RawGet(lua.LString("headers")).(*lua.LTable); ok {
 			reqHeaders.ForEach(func(key lua.LValue, value lua.LValue) {
 				req.Header.Set(key.String(), value.String())
