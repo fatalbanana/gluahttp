@@ -1,6 +1,7 @@
 package gluahttp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	urlLib "net/url"
 	"strings"
+	"time"
 
 	"github.com/yuin/gopher-lua"
 )
@@ -205,6 +207,24 @@ func (h *httpModule) doRequest(L *lua.LState, method string, url string, options
 			}
 		}
 
+		reqTimeout := options.RawGet(lua.LString("timeout"))
+		if reqTimeout != lua.LNil {
+			duration := time.Duration(0)
+			switch reqTimeout.(type) {
+			case lua.LNumber:
+				duration = time.Second * time.Duration(int(reqTimeout.(lua.LNumber)))
+			case lua.LString:
+				duration, err = time.ParseDuration(string(reqTimeout.(lua.LString)))
+				if err != nil {
+					return nil, err
+				}
+			}
+			ctx, cancel := context.WithTimeout(req.Context(), duration)
+			req = req.WithContext(ctx)
+			defer cancel()
+		}
+
+		// Set these last. That way the code above doesn't overwrite them.
 		if reqHeaders, ok := options.RawGet(lua.LString("headers")).(*lua.LTable); ok {
 			reqHeaders.ForEach(func(key lua.LValue, value lua.LValue) {
 				req.Header.Set(key.String(), value.String())

@@ -9,6 +9,7 @@ import (
 	"net/http/cookiejar"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yuin/gopher-lua"
 )
@@ -387,6 +388,51 @@ func TestResponseUrl(t *testing.T) {
 	}
 }
 
+func TestTimeoutShort(t *testing.T) {
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	setupServer(listener)
+	if err := evalLua(t, `
+		local http = require("http")
+
+		response, error = http.get("http://`+listener.Addr().String()+`/delayed", {
+			timeout="1ms"
+		})
+		assert_contains('context deadline exceeded', error)
+	`); err != nil {
+		t.Errorf("Failed to evaluate script: %s", err)
+	}
+}
+
+func TestTimeoutLong(t *testing.T) {
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	setupServer(listener)
+	if err := evalLua(t, `
+		local http = require("http")
+
+		response, error = http.post("http://`+listener.Addr().String()+`/delayed", {
+			timeout="1h"
+		})
+		assert_contains('ok', response.body)
+	`); err != nil {
+		t.Errorf("Failed to evaluate script: %s", err)
+	}
+}
+
+func TestBadlyFormattedTimeout(t *testing.T) {
+	listener, _ := net.Listen("tcp", "127.0.0.1:0")
+	setupServer(listener)
+	if err := evalLua(t, `
+		local http = require("http")
+
+		response, error = http.get("http://`+listener.Addr().String()+`/delayed", {
+			timeout="not a duration"
+		})
+		assert_contains('invalid duration', error)
+	`); err != nil {
+		t.Errorf("Failed to evaluate script: %s", err)
+	}
+}
+
 func evalLua(t *testing.T, script string) error {
 	L := lua.NewState()
 	defer L.Close()
@@ -463,6 +509,11 @@ func setupServer(listener net.Listener) {
 	})
 	mux.HandleFunc("/redirect", func(w http.ResponseWriter, req *http.Request) {
 		http.Redirect(w, req, "/", http.StatusFound)
+	})
+	mux.HandleFunc("/delayed", func(w http.ResponseWriter, req *http.Request) {
+		time.Sleep(time.Millisecond * 100)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
 	})
 	s := &http.Server{
 		Handler: mux,
