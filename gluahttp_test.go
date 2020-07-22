@@ -59,7 +59,7 @@ func TestRequestBatch(t *testing.T) {
 		end
 		table.sort(errorStrings)
 
-		assert_contains('Post : unsupported protocol scheme ""', errorStrings[1])
+		assert_contains('unsupported protocol scheme ""', errorStrings[1])
 		assert_equal('Request must be a table', errorStrings[2])
 		assert_equal(nil, errorStrings[3])
 		assert_equal(nil, errorStrings[4])
