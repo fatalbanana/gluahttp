@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    container:
+      image: golang
+    steps:
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Run go test
+        run: go test ./... -test.timeout=30s -v -cover
