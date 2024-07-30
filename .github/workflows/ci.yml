@@ -10,13 +10,16 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    container:
-      image: golang
     steps:
       - name: Check out source code
         uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.5'
 
       - name: Run go test
         run: go test ./... -test.timeout=30s -v -cover
